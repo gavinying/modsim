@@ -26,6 +26,7 @@ The corresponding client can be started as:
 import os
 import asyncio
 import signal
+import logging
 from contextlib import suppress
 from typing import Any
 
@@ -39,16 +40,16 @@ from pymodbus.device import ModbusDeviceIdentification
 from pymodbus.payload import BinaryPayloadBuilder
 from pymodbus.server import (
     StartAsyncSerialServer,
-    StartAsyncTcpServer,
-    StartAsyncTlsServer,
-    StartAsyncUdpServer,
+    ModbusTcpServer,
+    ModbusTlsServer,
+    ModbusUdpServer,
     ServerAsyncStop,
 )
 
 from . import __version__
 from .utils import get_commandline, get_utc_time, get_logger
 
-_logger = get_logger()
+_logger = logging.getLogger(__name__)
 
 
 def setup_server(args: Any) -> Any:
@@ -138,34 +139,36 @@ async def run_async_server(args: Any) -> Any:
     _logger.info(txt)
     if args.comm == "tcp":
         address = ("", args.port) if args.port else None
-        server = await StartAsyncTcpServer(
-            context=args.context,  # Data storage
-            identity=args.identity,  # server identify
-            # TBD host=
-            # TBD port=
-            address=address,  # listen address
-            # custom_functions=[],  # allow custom handling
-            framer=args.framer,  # The framer strategy to use
-            # ignore_missing_slaves=True,  # ignore request to a missing slave
-            # broadcast_enable=False,  # treat slave_id 0 as broadcast address,
-            # timeout=1,  # waiting time for request to complete
-            # TBD strict=True,  # use strict timing, t1.5 for Modbus RTU
+        server = ModbusTcpServer(
+            context=args.context,
+            identity=args.identity,
+            address=address,
+            framer=args.framer,
         )
+        try:
+            if not await server.listen():
+                raise OSError(
+                    "Could not start Modbus TCP listener on port %s" % args.port
+                )
+            await server.serving
+        finally:
+            await server.shutdown()
     elif args.comm == "udp":
         address = ("127.0.0.1", args.port) if args.port else None
-        server = await StartAsyncUdpServer(
-            context=args.context,  # Data storage
-            identity=args.identity,  # server identify
-            address=address,  # listen address
-            # custom_functions=[],  # allow custom handling
-            framer=args.framer,  # The framer strategy to use
-            # handler=None,  # handler for each session
-            # ignore_missing_slaves=True,  # ignore request to a missing slave
-            # broadcast_enable=False,  # treat unit_id 0 as broadcast address,
-            # timeout=1,  # waiting time for request to complete
-            # TBD strict=True,  # use strict timing, t1.5 for Modbus RTU
-            # defer_start=False,  # Only define server do not activate
+        server = ModbusUdpServer(
+            context=args.context,
+            identity=args.identity,
+            address=address,
+            framer=args.framer,
         )
+        try:
+            if not await server.listen():
+                raise OSError(
+                    "Could not start Modbus UDP listener on port %s" % args.port
+                )
+            await server.serving
+        finally:
+            await server.shutdown()
     elif args.comm == "serial":
         # socat -d -d PTY,link=/tmp/ptyp0,raw,echo=0,ispeed=9600
         #             PTY,link=/tmp/ttyp0,raw,echo=0,ospeed=9600
@@ -196,38 +199,34 @@ async def run_async_server(args: Any) -> Any:
             path = "../examples"
         else:
             path = "examples"
-        server = await StartAsyncTlsServer(
-            context=args.context,  # Data storage
-            host="localhost",  # define tcp address where to connect to.
-            # port=port,  # on which port
-            identity=args.identity,  # server identify
-            # custom_functions=[],  # allow custom handling
-            address=address,  # listen address
-            framer=args.framer,  # The framer strategy to use
-            # handler=None,  # handler for each session
-            allow_reuse_address=True,  # allow the reuse of an address
-            # The cert file path for TLS (used if sslctx is None)
+        server = ModbusTlsServer(
+            context=args.context,
+            identity=args.identity,
+            address=address,
+            framer=args.framer,
             certfile=f"{path}/certificates/pymodbus.crt",
-            # sslctx=sslctx,  # The SSLContext to use for TLS (default None and auto create)
-            # The key file path for TLS (used if sslctx is None)
             keyfile=f"{path}/certificates/pymodbus.key",
-            # password="none",  # The password for for decrypting the private key file
-            # reqclicert=False,  # Force the sever request client"s certificate
-            # ignore_missing_slaves=True,  # ignore request to a missing slave
-            # broadcast_enable=False,  # treat unit_id 0 as broadcast address,
-            # timeout=1,  # waiting time for request to complete
-            # TBD strict=True,  # use strict timing, t1.5 for Modbus RTU
-            defer_start=False,  # Only define server do not activate
         )
+        try:
+            if not await server.listen():
+                raise OSError(
+                    "Could not start Modbus TLS listener on port %s" % args.port
+                )
+            await server.serving
+        finally:
+            await server.shutdown()
     return server
 
 
 def app() -> None:
+    args = get_commandline()
+    global _logger
+    _logger = get_logger(args.log)
     _logger.info(
         f"Starting modsim v{__version__} at {get_utc_time().strftime('%Y-%m-%d %H:%M:%S')} UTC"
     )
 
-    run_args = setup_server(get_commandline())
+    run_args = setup_server(args)
     asyncio.run(_run_server_with_signals(run_args), debug=True)
 
     _logger.info("exiting.")
@@ -253,7 +252,10 @@ async def _run_server_with_signals(args: Any) -> None:
         nonlocal stop_requested
         if not stop_requested:
             stop_requested = True
-            loop.create_task(stop_server())
+            if args.comm in ("tcp", "udp", "tls"):
+                server_task.cancel()
+            else:
+                loop.create_task(stop_server())
 
     installed_signals = []
     for signum in (signal.SIGINT, signal.SIGTERM):
@@ -265,6 +267,9 @@ async def _run_server_with_signals(args: Any) -> None:
 
     try:
         await server_task
+    except asyncio.CancelledError:
+        if not stop_requested:
+            raise
     finally:
         for signum in installed_signals:
             loop.remove_signal_handler(signum)
