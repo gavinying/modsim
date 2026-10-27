@@ -3,7 +3,7 @@
 import argparse
 import logging.config
 from datetime import datetime, timezone
-from typing import Any, Optional, Dict
+from typing import Any, Dict
 from pymodbus.transaction import (
     ModbusAsciiFramer,
     ModbusBinaryFramer,
@@ -14,8 +14,6 @@ from pymodbus.transaction import (
 
 from . import __version__
 
-# global
-args: Optional[argparse.Namespace] = None
 config: Dict[str, Any] = {}
 
 

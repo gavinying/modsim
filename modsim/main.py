@@ -1,27 +1,5 @@
 #!/usr/bin/env python3
-"""Pymodbus asynchronous Server Example.
-An example of a multi threaded asynchronous server.
-usage: server_async.py [-h] [--comm {tcp,udp,serial,tls}]
-                       [--framer {ascii,binary,rtu,socket,tls}]
-                       [--log {critical,error,warning,info,debug}]
-                       [--port PORT] [--store {sequential,sparse,factory,none}]
-                       [--slaves SLAVES]
-Command line options for examples
-options:
-  -h, --help            show this help message and exit
-  --comm {tcp,udp,serial,tls}
-                        "serial", "tcp", "udp" or "tls"
-  --framer {ascii,binary,rtu,socket,tls}
-                        "ascii", "binary", "rtu", "socket" or "tls"
-  --log {critical,error,warning,info,debug}
-                        "critical", "error", "warning", "info" or "debug"
-  --port PORT           the port to use
-  --store {sequential,sparse,factory,none}
-                        "sequential", "sparse", "factory" or "none"
-  --slaves SLAVES       number of slaves to respond to
-The corresponding client can be started as:
-    python3 client_sync.py
-"""
+"""Modbus simulator server and process lifecycle."""
 
 import os
 import asyncio
@@ -60,12 +38,10 @@ def setup_server(args: Any) -> Any:
     # This is because many devices exhibit this kind of behavior (but not all)
     if not args.context:
         _logger.info("Create datastore")
-        # ----------------------------------------------------------------------- #
         # build your payload
-        # ----------------------------------------------------------------------- #
         co_builder = BinaryPayloadBuilder(byteorder=Endian.BIG, wordorder=Endian.BIG)
         # address=0, bytes=3
-        for i in range(3):
+        for _ in range(3):
             # The bits within each byte are big-endian
             # The coils status (from the first position) = [1,0,1,0,0,0,0,1]
             co_builder.add_bits([True, False, False, False, False, True, False, True])
@@ -100,11 +76,7 @@ def setup_server(args: Any) -> Any:
         # address=72, bytes=?
         hr_builder.add_string("this is a string")
 
-        # ----------------------------------------------------------------------- #
         # use that payload in the data store
-        # ----------------------------------------------------------------------- #
-        # Here we use the same reference block for each underlying store.
-        # ----------------------------------------------------------------------- #
         co_values = co_builder.to_coils()
         hr_values = hr_builder.to_registers()
         store = ModbusSlaveContext(
@@ -116,11 +88,8 @@ def setup_server(args: Any) -> Any:
         )
         args.context = ModbusServerContext(slaves=store, single=True)
 
-    # ----------------------------------------------------------------------- #
     # initialize the server information
-    # ----------------------------------------------------------------------- #
     # If you don't set this or any fields, they are defaulted to empty strings.
-    # ----------------------------------------------------------------------- #
     args.identity = ModbusDeviceIdentification(
         info_name={
             "VendorName": "Pymodbus",
@@ -171,25 +140,11 @@ async def run_async_server(args: Any) -> Any:
         finally:
             await server.shutdown()
     elif args.comm == "serial":
-        # socat -d -d PTY,link=/tmp/ptyp0,raw,echo=0,ispeed=9600
-        #             PTY,link=/tmp/ttyp0,raw,echo=0,ospeed=9600
         server = await StartAsyncSerialServer(
-            context=args.context,  # Data storage
-            identity=args.identity,  # server identify
-            # timeout=1,  # waiting time for request to complete
-            port=args.port,  # serial port
-            # custom_functions=[],  # allow custom handling
-            framer=args.framer,  # The framer strategy to use
-            # handler=None,  # handler for each session
-            # stopbits=1,  # The number of stop bits to use
-            # bytesize=8,  # The bytesize of the serial messages
-            # parity="N",  # Which kind of parity to use
-            # baudrate=9600,  # The baud rate to use for the serial device
-            # handle_local_echo=False,  # Handle local echo of the USB-to-RS485 adaptor
-            # ignore_missing_slaves=True,  # ignore request to a missing slave
-            # broadcast_enable=False,  # treat unit_id 0 as broadcast address,
-            # strict=True,  # use strict timing, t1.5 for Modbus RTU
-            # defer_start=False,  # Only define server do not activate
+            context=args.context,
+            identity=args.identity,
+            port=args.port,
+            framer=args.framer,
         )
     elif args.comm == "tls":
         address = ("", args.port) if args.port else None
