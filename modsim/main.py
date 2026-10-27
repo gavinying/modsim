@@ -137,6 +137,7 @@ async def run_async_server(args: Any) -> Any:
     """Run server."""
     txt = f"Start ASYNC server, listening on {args.port} - {args.comm}"
     _logger.info(txt)
+    server: Any
     if args.comm == "tcp":
         address = ("", args.port) if args.port else None
         server = ModbusTcpServer(
