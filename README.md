@@ -1,6 +1,6 @@
 # ModSim - A Simple Modbus TCP Device Simulator
 
-*modsim* is a Modbus device simulator that can run locally or in a container.
+*modsim* is a Modbus device simulator that can run locally or in a container. A public simulator is available at `modsim.topmaker.net:502` for quick testing.
 Its default datastore contains all four Modbus tables:
 - Coil Type
 - Discrete input Type
