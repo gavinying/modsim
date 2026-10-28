@@ -7,7 +7,7 @@ import asyncio
 import signal
 import logging
 from contextlib import suppress
-from typing import Any
+from typing import Any, Union
 
 from pymodbus.datastore import (
     ModbusDeviceContext,
@@ -110,7 +110,7 @@ async def run_async_server(args: Any) -> Any:
     _logger.info(txt)
     server: Any
     if args.comm == "tcp":
-        address = ("", args.port) if args.port else None
+        address: tuple[str, int] = ("", args.port)
         server = ModbusTcpServer(
             context=args.context,
             identity=args.identity,
@@ -125,8 +125,9 @@ async def run_async_server(args: Any) -> Any:
             await server.serving
         finally:
             await server.shutdown()
+        return server
     elif args.comm == "udp":
-        address = ("127.0.0.1", args.port) if args.port else None
+        address = ("127.0.0.1", args.port)
         server = ModbusUdpServer(
             context=args.context,
             identity=args.identity,
@@ -141,15 +142,17 @@ async def run_async_server(args: Any) -> Any:
             await server.serving
         finally:
             await server.shutdown()
+        return server
     elif args.comm == "serial":
-        server = await StartAsyncSerialServer(
+        await StartAsyncSerialServer(
             context=args.context,
             identity=args.identity,
             port=args.port,
             framer=args.framer,
         )
+        return None
     elif args.comm == "tls":
-        address = ("", args.port) if args.port else None
+        address = ("", args.port)
         cwd = os.getcwd().split("/")[-1]
         if cwd == "examples":
             path = "."
@@ -157,14 +160,14 @@ async def run_async_server(args: Any) -> Any:
             path = "../examples"
         else:
             path = "examples"
-        
+
         # Create SSL context from cert and key files
         sslctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         sslctx.load_cert_chain(
             certfile=f"{path}/certificates/pymodbus.crt",
             keyfile=f"{path}/certificates/pymodbus.key",
         )
-        
+
         server = ModbusTlsServer(
             context=args.context,
             identity=args.identity,
@@ -180,7 +183,8 @@ async def run_async_server(args: Any) -> Any:
             await server.serving
         finally:
             await server.shutdown()
-    return server
+        return server
+    raise ValueError(f"Unknown communication type: {args.comm}")
 
 
 def app() -> None:
