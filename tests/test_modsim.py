@@ -373,13 +373,19 @@ def test_local_tls_server_with_ephemeral_certificate(tmp_path):
                 time.sleep(0.05)
         with context.wrap_socket(raw, server_hostname="localhost") as client:
             client.settimeout(2)
-            client.sendall(b"\x03\x9c\x40\x00\x02")
+            # Send Modbus TCP message with MBAP header
+            # MBAP: transaction_id (2) + protocol_id (2) + length (2) + unit_id (1)
+            # PDU: function_code (1) + starting_address (2) + quantity (2)
+            message = b"\x00\x01\x00\x00\x00\x06\x01\x03\x9c\x40\x00\x02"
+            client.sendall(message)
             response = b""
-            while len(response) < 6:
-                part = client.recv(6 - len(response))
+            # Expect MBAP header (6 bytes) + PDU response (at least 1 byte)
+            while len(response) < 13:
+                part = client.recv(13 - len(response))
                 assert part
                 response += part
-            assert response == b"\x03\x04\x00\x01\x00\x02"
+            # Verify MBAP header and response
+            assert response == b"\x00\x01\x00\x00\x00\x07\x01\x03\x04\x00\x01\x00\x02"
         conflict = subprocess.run(
             [
                 sys.executable,
