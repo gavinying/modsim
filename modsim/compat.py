@@ -5,7 +5,7 @@ between PyModbus 3.6.9 and 3.16.1.
 """
 
 import struct
-from typing import List, Union
+from typing import List
 
 
 class Endian:
@@ -78,9 +78,9 @@ class BinaryPayloadBuilder:
 
     def add_32bit_float(self, value: float) -> "BinaryPayloadBuilder":
         """Add a 32-bit float (uses 2 registers)."""
-        fmt = f">{chr(102)}"  # ">f" for big-endian float
+        fmt = ">f"  # big-endian float
         packed = struct.pack(fmt, value)
-        value_int = struct.unpack(f">I", packed)[0]
+        value_int = struct.unpack(">I", packed)[0]
         return self.add_32bit_uint(value_int)
 
     def add_64bit_uint(self, value: int) -> "BinaryPayloadBuilder":

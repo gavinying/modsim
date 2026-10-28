@@ -7,7 +7,7 @@ import asyncio
 import signal
 import logging
 from contextlib import suppress
-from typing import Any, Union
+from typing import Any
 
 from pymodbus.datastore import (
     ModbusDeviceContext,

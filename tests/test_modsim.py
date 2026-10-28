@@ -379,7 +379,7 @@ def test_local_tls_server_with_ephemeral_certificate(tmp_path):
             message = b"\x00\x01\x00\x00\x00\x06\x01\x03\x9c\x40\x00\x02"
             client.sendall(message)
             response = b""
-            # Expect MBAP header (6 bytes) + PDU response (at least 1 byte)
+            # Expect MBAP header (7 bytes) + PDU response (at least 1 byte)
             while len(response) < 13:
                 part = client.recv(13 - len(response))
                 assert part
